@@ -1,0 +1,32 @@
+<?jelly escape-by-default='true'?>
+<j:jelly xmlns:j="jelly:core" xmlns:st="jelly:stapler" xmlns:d="jelly:define" xmlns:l="/lib/layout"
+         xmlns:t="/lib/hudson" xmlns:f="/lib/form">
+    <f:entry title="${%project}" field="project">
+        <label>
+            <f:textbox  />
+        </label>
+    </f:entry>
+
+    <f:entry title="${%summary}" field="summary">
+        <label>
+            <f:textbox default="${descriptor.DEFAULT_SUMMARY}"/>
+        </label>
+    </f:entry>
+
+    <f:entry title="${%description}" field="description">
+        <label>
+            <f:textarea default="${descriptor.DEFAULT_DESCRIPTION}"/>
+        </label>
+    </f:entry>
+
+    <f:entry title="${%command}" field="command">
+        <label>
+            <f:textbox  />
+        </label>
+    </f:entry>
+
+    <f:entry title="${%attachBuildLog}" field="attachBuildLog">
+        <f:checkbox name="attachBuildLog" checked="true"/>
+    </f:entry>
+
+</j:jelly>
