@@ -2,7 +2,9 @@ package org.jenkinsci.plugins.youtrack.pipeline;
 
 import com.gargoylesoftware.htmlunit.html.*;
 import com.gargoylesoftware.htmlunit.javascript.host.html.HTMLInputElement;
+import org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition;
 import org.jenkinsci.plugins.workflow.job.WorkflowJob;
+import org.jenkinsci.plugins.workflow.job.WorkflowRun;
 import org.junit.Rule;
 import org.junit.Test;
 import org.jvnet.hudson.test.JenkinsRule;

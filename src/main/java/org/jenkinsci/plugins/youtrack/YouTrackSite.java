@@ -2,10 +2,13 @@ package org.jenkinsci.plugins.youtrack;
 
 import hudson.model.AbstractBuild;
 import hudson.model.AbstractProject;
+import hudson.model.Job;
 import hudson.model.Result;
 import lombok.Getter;
 import lombok.Setter;
 import org.jenkinsci.plugins.scriptsecurity.sandbox.groovy.SecureGroovyScript;
+import org.jenkinsci.plugins.youtrack.youtrackapi.User;
+import org.jenkinsci.plugins.youtrack.youtrackapi.YouTrackServer;
 import org.kohsuke.stapler.DataBoundConstructor;
 
 import java.util.List;
@@ -40,7 +43,7 @@ public class YouTrackSite {
         this.name = name;
     }
 
-    public static YouTrackSite get(AbstractProject<?, ?> project) {
+    public static YouTrackSite get(Job<?, ?> project) {
         YouTrackProjectProperty ypp = project.getProperty(YouTrackProjectProperty.class);
         if (ypp != null) {
             YouTrackSite site = ypp.getSite();
@@ -73,5 +76,18 @@ public class YouTrackSite {
                     break;
             }
         }
+    }
+
+    public YouTrackServer createServer() {
+        return new YouTrackServer(getUrl());
+    }
+
+    public User getUser() { return getUser(null); }
+
+    public User getUser(YouTrackServer server) {
+        if(server==null)
+            server = createServer();
+
+        return server.login(getUsername(), getPassword());
     }
 }
