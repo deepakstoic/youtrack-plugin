@@ -1,6 +1,7 @@
 package org.jenkinsci.plugins.youtrack.pipeline;
 
 import hudson.Extension;
+import hudson.FilePath;
 import hudson.model.Job;
 import hudson.model.Run;
 import hudson.model.TaskListener;
@@ -51,12 +52,12 @@ public class YouTrackCreateIssueStep extends Step {
     }
 
     private static class Execution extends SynchronousNonBlockingStepExecution<Void> {
-        private YouTrackCreateIssueStep step;
-        private Run run;
-        private TaskListener listener;
-        private YouTrackSite site;
-        private YouTrackServer server;
-        private User user;
+        private transient YouTrackCreateIssueStep step;
+        private transient Run run;
+        private transient TaskListener listener;
+        private transient YouTrackSite site;
+        private transient YouTrackServer server;
+        private transient User user;
 
         protected Execution(YouTrackCreateIssueStep step, @Nonnull StepContext context) throws IOException, InterruptedException {
             super(context);
@@ -64,7 +65,7 @@ public class YouTrackCreateIssueStep extends Step {
             run = context.get(Run.class);
             listener = context.get(TaskListener.class);
             site = YouTrackSite.get(run.getParent());
-            if(site!=null) {
+            if (site != null) {
                 server = site.createServer();
             } else {
                 server = null;
@@ -81,7 +82,7 @@ public class YouTrackCreateIssueStep extends Step {
 
         private Command getCommand(File buildLog) {
             String project = step.getProject();
-            if(project==null || project.isEmpty())
+            if (project == null || project.isEmpty())
                 project = site.getProject();
 
             return server.createIssue(site.getName(), getUser(), project,
@@ -102,23 +103,24 @@ public class YouTrackCreateIssueStep extends Step {
 
         @Override
         protected Void run() throws Exception {
-            if(server==null) {
+            if (server == null) {
                 listener.getLogger().println("No YouTrack site configured");
-                return null;
+            } else {
+                User user = getUser();
+                if (user == null || !user.isLoggedIn()) {
+                    listener.getLogger().println("Could not login user to YouTrack");
+                    throw new IllegalArgumentException(
+                            "Error in YouTrack Settings. Please review settings in Jenkins configuration.");
+                }
+
+                File buildLog = null;
+                if (step.isAttachBuildLog()) {
+                    buildLog = run.getLogFile();
+                }
+
+                runAction(buildLog);
             }
 
-            User user = getUser();
-            if (user == null) {
-                listener.getLogger().println("Could not login user to YouTrack");
-                return null;
-            }
-
-            File buildLog = null;
-            if (step.isAttachBuildLog()) {
-                buildLog = run.getLogFile();
-            }
-
-            runAction(buildLog);
             return null;
         }
 

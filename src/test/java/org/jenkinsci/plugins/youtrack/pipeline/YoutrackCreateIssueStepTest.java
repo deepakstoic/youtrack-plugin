@@ -1,290 +1,125 @@
 package org.jenkinsci.plugins.youtrack.pipeline;
 
-import hudson.EnvVars;
-import hudson.Launcher;
-import hudson.model.*;
+import hudson.model.Result;
+import org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition;
+import org.jenkinsci.plugins.workflow.job.WorkflowJob;
 import org.jenkinsci.plugins.workflow.job.WorkflowRun;
-import org.jenkinsci.plugins.workflow.steps.StepContext;
-import org.jenkinsci.plugins.workflow.steps.SynchronousNonBlockingStepExecution;
-import org.jenkinsci.plugins.youtrack.Command;
+import org.jenkinsci.plugins.youtrack.YouTrackProjectProperty;
 import org.jenkinsci.plugins.youtrack.YouTrackSite;
-import org.jenkinsci.plugins.youtrack.YoutrackCreateIssueOnBuildFailure;
 import org.jenkinsci.plugins.youtrack.youtrackapi.User;
 import org.jenkinsci.plugins.youtrack.youtrackapi.YouTrackServer;
+import org.junit.Before;
+import org.junit.ClassRule;
+import org.junit.Rule;
 import org.junit.Test;
-import org.mockito.Matchers;
+import org.jvnet.hudson.test.BuildWatcher;
+import org.jvnet.hudson.test.JenkinsRule;
+import org.mockito.Mock;
 import org.mockito.Mockito;
-import org.mockito.invocation.InvocationOnMock;
-import org.mockito.stubbing.Answer;
+import org.mockito.MockitoAnnotations;
 
-import java.io.ByteArrayOutputStream;
-import java.io.File;
-import java.io.IOException;
-import java.io.PrintStream;
-import java.util.ArrayList;
-import java.util.List;
-
-import static org.hamcrest.core.IsEqual.equalTo;
-import static org.junit.Assert.assertThat;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.when;
 
 public class YoutrackCreateIssueStepTest {
+    @Rule
+    public JenkinsRule j = new JenkinsRule();
+
+    @ClassRule
+    public static BuildWatcher bw = new BuildWatcher();
+
+    @Mock
+    private YouTrackProjectProperty ytProperties;
+
+    @Mock
+    private YouTrackSite site;
+
+    @Mock
+    private YouTrackServer server;
+
+    @Mock
+    private User user;
+
+    @Before
+    public void setup() {
+        MockitoAnnotations.initMocks(this);
+
+        when(ytProperties.getDescriptor()).thenReturn(YouTrackProjectProperty.DESCRIPTOR);
+        when(ytProperties.getSite()).thenReturn(site);
+        when(site.createServer()).thenReturn(server);
+        when(site.getUsername()).thenReturn("test");
+        when(site.getPassword()).thenReturn("test");
+        when(site.getUser(server)).thenReturn(user);
+        when(server.login("test", "test")).thenReturn(user);
+
+        Mockito.reset(user);
+    }
 
     @Test
     public void testNoSiteSetup() throws Exception {
-        YouTrackCreateIssueStep step = new YouTrackCreateIssueStep();
-        StepContext context = mock(StepContext.class);
-        SynchronousNonBlockingStepExecution e = (SynchronousNonBlockingStepExecution) step.start(context);
-        e.start();
-    }
-/*
-    @Test
-    public void testSuccessFullBuild() throws IOException, InterruptedException {
-        AbstractBuild build = mock(AbstractBuild.class);
-        Launcher launcher = mock(Launcher.class);
-        BuildListener buildListener = mock(BuildListener.class);
-
-        YoutrackCreateIssueOnBuildFailure youtrackCreateIssueOnBuildFailure =
-                spy(new YoutrackCreateIssueOnBuildFailure("PROJECT", "SUMMARY", "DESCRIPTION", YoutrackCreateIssueOnBuildFailure.FAILURE, null, null,false));
-
-        YouTrackSite youTrackSite = new YouTrackSite("site", "user", "password", "http://example.com");
-        youTrackSite.setPluginEnabled(false);
-
-        ByteArrayOutputStream stream = new ByteArrayOutputStream();
-        when(buildListener.getLogger()).thenReturn(new PrintStream(stream));
-        when(build.getResult()).thenReturn(Result.SUCCESS);
-
-        doReturn(youTrackSite).when(youtrackCreateIssueOnBuildFailure).getYouTrackSite(build);
-
-        youtrackCreateIssueOnBuildFailure.perform(build,launcher,buildListener);
-        String s = stream.toString();
-        assertThat(s.trim(), equalTo(""));
+       WorkflowJob job = j.createProject(WorkflowJob.class, "YouTrackTest");
+       job.setDefinition(new CpsFlowDefinition(
+               "pipeline {\n" +
+                     "  agent any\n"+
+                     "  stages {\n"+
+                     "    stage(\"Notify\") {\n"+
+                     "      steps {\n"+
+                     "        ytCreateIssue()\n" +
+                     "      }\n" +
+                     "    }\n" +
+                     "  }\n" +
+                     "}", true)
+       );
+       WorkflowRun b = j.assertBuildStatusSuccess(job.scheduleBuild2(0));
+       j.assertLogContains("No YouTrack site configured", b);
+       j.assertLogContains("SUCCESS", b);
     }
 
     @Test
-    public void testUnstableOnlyCreateOnFailureBuild() throws IOException, InterruptedException {
-        AbstractBuild build = mock(AbstractBuild.class);
-        Launcher launcher = mock(Launcher.class);
-        BuildListener buildListener = mock(BuildListener.class);
+    public void testWithSiteSetupLoginFailed() throws Exception {
+        WorkflowJob job = j.createProject(WorkflowJob.class, "YouTrackTest");
+        job.setDefinition(new CpsFlowDefinition(
+                "pipeline {\n" +
+                        "  agent any\n"+
+                        "  stages {\n"+
+                        "    stage(\"Notify\") {\n"+
+                        "      steps {\n"+
+                        "        ytCreateIssue()\n" +
+                        "      }\n" +
+                        "    }\n" +
+                        "  }\n" +
+                        "}", true)
+        );
 
-        YoutrackCreateIssueOnBuildFailure youtrackCreateIssueOnBuildFailure =
-                spy(new YoutrackCreateIssueOnBuildFailure("PROJECT", "SUMMARY", "DESCRIPTION", YoutrackCreateIssueOnBuildFailure.FAILURE, null, null,false));
+        doReturn(false).when(user).isLoggedIn();
 
-        YouTrackSite youTrackSite = new YouTrackSite("site", "user", "password", "http://example.com");
-        youTrackSite.setPluginEnabled(false);
-
-        ByteArrayOutputStream stream = new ByteArrayOutputStream();
-        when(buildListener.getLogger()).thenReturn(new PrintStream(stream));
-        when(build.getResult()).thenReturn(Result.UNSTABLE);
-
-        doReturn(youTrackSite).when(youtrackCreateIssueOnBuildFailure).getYouTrackSite(build);
-        doReturn(new YouTrackServer(youTrackSite.getUrl())).when(youtrackCreateIssueOnBuildFailure).getYouTrackServer(youTrackSite);
-
-        youtrackCreateIssueOnBuildFailure.perform(build,launcher,buildListener);
-        String s = stream.toString();
-        assertThat(s.trim(), equalTo(""));
+        job.addProperty(ytProperties);
+        WorkflowRun b = j.assertBuildStatus(Result.FAILURE, job.scheduleBuild2(0));
+        j.assertLogContains("Could not login user to YouTrack", b);
+        j.assertLogContains("FAILURE", b);
     }
 
     @Test
-    public void testNoConnectionToServer() throws IOException, InterruptedException {
-        AbstractBuild build = mock(AbstractBuild.class);
-        Launcher launcher = mock(Launcher.class);
-        BuildListener buildListener = mock(BuildListener.class);
+    public void testDefaultIssue() throws Exception {
+        WorkflowJob job = j.createProject(WorkflowJob.class, "YouTrackTest");
+        job.setDefinition(new CpsFlowDefinition(
+                "pipeline {\n" +
+                        "  agent any\n"+
+                        "  stages {\n"+
+                        "    stage(\"Notify\") {\n"+
+                        "      steps {\n"+
+                        "        ytCreateIssue()\n" +
+                        "      }\n" +
+                        "    }\n" +
+                        "  }\n" +
+                        "}", true)
+        );
 
-        YoutrackCreateIssueOnBuildFailure youtrackCreateIssueOnBuildFailure =
-                spy(new YoutrackCreateIssueOnBuildFailure("PROJECT", "SUMMARY", "DESCRIPTION", YoutrackCreateIssueOnBuildFailure.FAILUREORUNSTABL, null, null,false));
+        doReturn(true).when(user).isLoggedIn();
 
-        YouTrackSite youTrackSite = new YouTrackSite("site", "user", "password", "http://example.com");
-        youTrackSite.setPluginEnabled(false);
-
-        ByteArrayOutputStream stream = new ByteArrayOutputStream();
-        when(buildListener.getLogger()).thenReturn(new PrintStream(stream));
-        when(build.getResult()).thenReturn(Result.UNSTABLE);
-
-        doReturn(youTrackSite).when(youtrackCreateIssueOnBuildFailure).getYouTrackSite(build);
-        YouTrackServer server = mock(YouTrackServer.class);
-
-        doReturn(server).when(youtrackCreateIssueOnBuildFailure).getYouTrackServer(youTrackSite);
-
-        youtrackCreateIssueOnBuildFailure.perform(build,launcher,buildListener);
-        String s = stream.toString();
-        assertThat(s.trim(), equalTo("Could not login user to YouTrack"));
+        job.addProperty(ytProperties);
+        WorkflowRun b = j.assertBuildStatus(Result.SUCCESS, job.scheduleBuild2(0));
+        j.assertLogContains("Could not login user to YouTrack", b);
+        j.assertLogContains("SUCCESS", b);
     }
-
-    @Test
-    public void testUnstableAndCreateIssueOnUnstable() throws IOException, InterruptedException {
-        AbstractBuild build = mock(AbstractBuild.class);
-        Launcher launcher = mock(Launcher.class);
-        BuildListener buildListener = mock(BuildListener.class);
-
-
-        YoutrackCreateIssueOnBuildFailure youtrackCreateIssueOnBuildFailure =
-                spy(new YoutrackCreateIssueOnBuildFailure("PROJECT", "SUMMARY", "DESCRIPTION", YoutrackCreateIssueOnBuildFailure.FAILUREORUNSTABL, null, null,false));
-
-        YouTrackSite youTrackSite = new YouTrackSite("site", "user", "password", "http://example.com");
-        youTrackSite.setPluginEnabled(false);
-
-        ByteArrayOutputStream stream = new ByteArrayOutputStream();
-        when(buildListener.getLogger()).thenReturn(new PrintStream(stream));
-        when(build.getResult()).thenReturn(Result.UNSTABLE);
-        when(build.getEnvironment(buildListener)).thenReturn(new EnvVars());
-
-        doReturn(youTrackSite).when(youtrackCreateIssueOnBuildFailure).getYouTrackSite(build);
-        YouTrackServer server = mock(YouTrackServer.class);
-
-        doReturn(server).when(youtrackCreateIssueOnBuildFailure).getYouTrackServer(youTrackSite);
-
-
-        final List<CreateIssueCommand> commandList = new ArrayList<CreateIssueCommand>();
-        Answer<Command> answer = new Answer<Command>() {
-            public Command answer(InvocationOnMock invocation) throws Throwable {
-                CreateIssueCommand command = new CreateIssueCommand();
-                command.project = (String) invocation.getArguments()[2];
-                command.summary = (String) invocation.getArguments()[3];
-                command.description = (String) invocation.getArguments()[4];
-                command.command = (String) invocation.getArguments()[5];
-                commandList.add(command);
-                Command issuedCommand = new Command();
-                issuedCommand.setStatus(Command.Status.OK);
-                issuedCommand.setIssueId("PROJECT-1");
-                return issuedCommand;
-            }
-        };
-        doAnswer(answer).when(server).createIssue(Mockito.anyString(), Mockito.any(User.class), Mockito.anyString(), Mockito.anyString(), Mockito.anyString(), Mockito.anyString(), Matchers.<File>any());
-
-        User user = new User();
-        user.setLoggedIn(true);
-        user.setUsername("user");
-        when(server.login("user", "password")).thenReturn(user);
-        youtrackCreateIssueOnBuildFailure.perform(build, launcher, buildListener);
-        String s = stream.toString();
-        assertThat(s.trim(), equalTo("Created new YouTrack issue PROJECT-1"));
-        assertThat(1, equalTo(commandList.size()));
-    }
-
-    @Test
-    public void testVariableExpansion() throws IOException, InterruptedException {
-        AbstractBuild build = mock(AbstractBuild.class);
-        Launcher launcher = mock(Launcher.class);
-        BuildListener buildListener = mock(BuildListener.class);
-
-
-        YoutrackCreateIssueOnBuildFailure youtrackCreateIssueOnBuildFailure =
-                spy(new YoutrackCreateIssueOnBuildFailure("project", "${VAR1}", "${VAR2}", YoutrackCreateIssueOnBuildFailure.FAILUREORUNSTABL, null, "${VAR3}",false));
-
-        YouTrackSite youTrackSite = new YouTrackSite("site", "user", "password", "http://example.com");
-        youTrackSite.setPluginEnabled(false);
-
-        ByteArrayOutputStream stream = new ByteArrayOutputStream();
-        when(buildListener.getLogger()).thenReturn(new PrintStream(stream));
-        when(build.getResult()).thenReturn(Result.UNSTABLE);
-        EnvVars envVars = new EnvVars();
-        envVars.put("VAR1", "v1");
-        envVars.put("VAR2", "v2");
-        envVars.put("VAR3", "v3");
-        when(build.getEnvironment(buildListener)).thenReturn(envVars);
-
-        doReturn(youTrackSite).when(youtrackCreateIssueOnBuildFailure).getYouTrackSite(build);
-        YouTrackServer server = mock(YouTrackServer.class);
-
-        doReturn(server).when(youtrackCreateIssueOnBuildFailure).getYouTrackServer(youTrackSite);
-
-
-        final List<CreateIssueCommand> commandList = new ArrayList<CreateIssueCommand>();
-        Answer<Command> answer = new Answer<Command>() {
-            public Command answer(InvocationOnMock invocation) throws Throwable {
-                CreateIssueCommand command = new CreateIssueCommand();
-                command.project = (String) invocation.getArguments()[2];
-                command.summary = (String) invocation.getArguments()[3];
-                command.description = (String) invocation.getArguments()[4];
-                command.command = (String) invocation.getArguments()[5];
-                commandList.add(command);
-                Command issuedCommand = new Command();
-                issuedCommand.setStatus(Command.Status.OK);
-                issuedCommand.setIssueId("project-1");
-                return issuedCommand;
-            }
-        };
-        doAnswer(answer).when(server).createIssue(Mockito.anyString(), Mockito.any(User.class), Mockito.anyString(), Mockito.anyString(), Mockito.anyString(), Mockito.anyString(), Matchers.<File>any());
-
-        User user = new User();
-        user.setLoggedIn(true);
-        user.setUsername("user");
-        when(server.login("user", "password")).thenReturn(user);
-        youtrackCreateIssueOnBuildFailure.perform(build, launcher, buildListener);
-        String s = stream.toString();
-        assertThat(s.trim(), equalTo("Created new YouTrack issue project-1"));
-        assertThat(1, equalTo(commandList.size()));
-        CreateIssueCommand createIssueCommand = commandList.get(0);
-        assertThat("v1", equalTo(createIssueCommand.summary));
-        assertThat("v2", equalTo(createIssueCommand.description));
-        assertThat("v3", equalTo(createIssueCommand.command));
-    }
-
-    @Test
-    public void testDefaultValues() throws IOException, InterruptedException {
-        FreeStyleProject mock = mock(FreeStyleProject.class);
-        AbstractBuild build = spy(new FreeStyleBuild(mock));
-        Launcher launcher = mock(Launcher.class);
-        BuildListener buildListener = mock(BuildListener.class);
-
-        YoutrackCreateIssueOnBuildFailure youtrackCreateIssueOnBuildFailure =
-                spy(new YoutrackCreateIssueOnBuildFailure("project", "", "", YoutrackCreateIssueOnBuildFailure.FAILUREORUNSTABL, null, null,false));
-
-        YouTrackSite youTrackSite = new YouTrackSite("site", "user", "password", "http://example.com");
-        youTrackSite.setPluginEnabled(false);
-
-        ByteArrayOutputStream stream = new ByteArrayOutputStream();
-        when(buildListener.getLogger()).thenReturn(new PrintStream(stream));
-        when(build.getResult()).thenReturn(Result.UNSTABLE);
-        when(build.getNumber()).thenReturn(1);
-        EnvVars envVars = new EnvVars();
-
-
-        doReturn(envVars).when(build).getEnvironment(buildListener);
-
-        doReturn(youTrackSite).when(youtrackCreateIssueOnBuildFailure).getYouTrackSite(build);
-        YouTrackServer server = mock(YouTrackServer.class);
-
-        doReturn(server).when(youtrackCreateIssueOnBuildFailure).getYouTrackServer(youTrackSite);
-        doReturn("buildUrl").when(youtrackCreateIssueOnBuildFailure).getAbsoluteUrl(build);
-
-
-        final List<CreateIssueCommand> commandList = new ArrayList<CreateIssueCommand>();
-        Answer<Command> answer = new Answer<Command>() {
-            public Command answer(InvocationOnMock invocation) throws Throwable {
-                CreateIssueCommand command = new CreateIssueCommand();
-                command.project = (String) invocation.getArguments()[2];
-                command.summary = (String) invocation.getArguments()[3];
-                command.description = (String) invocation.getArguments()[4];
-                command.command = (String) invocation.getArguments()[5];
-                commandList.add(command);
-                Command issuedCommand = new Command();
-                issuedCommand.setStatus(Command.Status.OK);
-                issuedCommand.setIssueId("project-1");
-                return issuedCommand;
-            }
-        };
-        doAnswer(answer).when(server).createIssue(Mockito.anyString(), Mockito.any(User.class), Mockito.anyString(), Mockito.anyString(), Mockito.anyString(), Mockito.anyString(), Matchers.<File>any());
-
-        User user = new User();
-        user.setLoggedIn(true);
-        user.setUsername("user");
-        when(server.login("user", "password")).thenReturn(user);
-        youtrackCreateIssueOnBuildFailure.perform(build, launcher, buildListener);
-        String s = stream.toString();
-        assertThat(s.trim(), equalTo("Created new YouTrack issue project-1"));
-        assertThat(1, equalTo(commandList.size()));
-        CreateIssueCommand createIssueCommand = commandList.get(0);
-        assertThat("Build failure in build 1", equalTo(createIssueCommand.summary));
-        assertThat("buildUrl", equalTo(createIssueCommand.description));
-    }
-
-    private static class CreateIssueCommand {
-        String project;
-        String summary;
-        String description;
-        String command;
-    }
-*/
 }
