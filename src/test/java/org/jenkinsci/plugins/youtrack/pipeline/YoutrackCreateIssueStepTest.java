@@ -4,6 +4,8 @@ import hudson.EnvVars;
 import hudson.Launcher;
 import hudson.model.*;
 import org.jenkinsci.plugins.workflow.job.WorkflowRun;
+import org.jenkinsci.plugins.workflow.steps.StepContext;
+import org.jenkinsci.plugins.workflow.steps.SynchronousNonBlockingStepExecution;
 import org.jenkinsci.plugins.youtrack.Command;
 import org.jenkinsci.plugins.youtrack.YouTrackSite;
 import org.jenkinsci.plugins.youtrack.YoutrackCreateIssueOnBuildFailure;
@@ -29,25 +31,11 @@ import static org.mockito.Mockito.*;
 public class YoutrackCreateIssueStepTest {
 
     @Test
-    public void testNoSiteSetup() throws IOException, InterruptedException {
-        Run run = mock(WorkflowRun.class);
-        Launcher launcher = mock(Launcher.class);
-        BuildListener buildListener = mock(BuildListener.class);
-
-        YoutrackCreateIssueOnBuildFailure youtrackCreateIssueOnBuildFailure =
-                spy(new YoutrackCreateIssueOnBuildFailure("PROJECT", "SUMMARY", "DESCRIPTION", YoutrackCreateIssueOnBuildFailure.FAILURE, null, null, false));
-
-        YouTrackSite youTrackSite = new YouTrackSite("site", "user", "password", "http://example.com");
-        youTrackSite.setPluginEnabled(false);
-
-        ByteArrayOutputStream stream = new ByteArrayOutputStream();
-        when(buildListener.getLogger()).thenReturn(new PrintStream(stream));
-
-        doReturn(null).when(youtrackCreateIssueOnBuildFailure).getYouTrackSite(build);
-
-        youtrackCreateIssueOnBuildFailure.perform(build,launcher,buildListener);
-        String s = stream.toString();
-        assertThat(s.trim(), equalTo("No YouTrack site configured"));
+    public void testNoSiteSetup() throws Exception {
+        YouTrackCreateIssueStep step = new YouTrackCreateIssueStep();
+        StepContext context = mock(StepContext.class);
+        SynchronousNonBlockingStepExecution e = (SynchronousNonBlockingStepExecution) step.start(context);
+        e.start();
     }
 /*
     @Test

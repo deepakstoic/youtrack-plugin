@@ -80,7 +80,11 @@ public class YouTrackCreateIssueStep extends Step {
         }
 
         private Command getCommand(File buildLog) {
-            return server.createIssue(site.getName(), getUser(), step.getProject(),
+            String project = step.getProject();
+            if(project==null || project.isEmpty())
+                project = site.getProject();
+
+            return server.createIssue(site.getName(), getUser(), project,
                     step.getSummary(), step.getDescription(), step.getCommand(), buildLog);
         }
 
