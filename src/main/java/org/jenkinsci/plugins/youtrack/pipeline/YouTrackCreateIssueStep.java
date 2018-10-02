@@ -1,5 +1,6 @@
 package org.jenkinsci.plugins.youtrack.pipeline;
 
+import hudson.EnvVars;
 import hudson.Extension;
 import hudson.FilePath;
 import hudson.model.Job;
@@ -10,6 +11,7 @@ import lombok.Setter;
 import org.jenkinsci.plugins.workflow.steps.*;
 import org.jenkinsci.plugins.youtrack.Command;
 import org.jenkinsci.plugins.youtrack.YouTrackCommandAction;
+import org.jenkinsci.plugins.youtrack.YouTrackProjectProperty;
 import org.jenkinsci.plugins.youtrack.YouTrackSite;
 import org.jenkinsci.plugins.youtrack.youtrackapi.User;
 import org.jenkinsci.plugins.youtrack.youtrackapi.YouTrackServer;
@@ -40,6 +42,10 @@ public class YouTrackCreateIssueStep extends Step {
             this.summary = summary;
     }
 
+    private String actualSummary(Run<?,?> build, TaskListener listener) {
+        return summary;
+    }
+
     @DataBoundSetter
     public void setDescription(String description) {
         if(!description.equals(DescriptorImpl.DEFAULT_DESCRIPTION))
@@ -58,12 +64,14 @@ public class YouTrackCreateIssueStep extends Step {
         private transient YouTrackSite site;
         private transient YouTrackServer server;
         private transient User user;
+        private transient EnvVars env;
 
         protected Execution(YouTrackCreateIssueStep step, @Nonnull StepContext context) throws IOException, InterruptedException {
             super(context);
             this.step = step;
             run = context.get(Run.class);
             listener = context.get(TaskListener.class);
+            env = context.get(EnvVars.class);
             site = YouTrackSite.get(run.getParent());
             if (site != null) {
                 server = site.createServer();
@@ -82,11 +90,14 @@ public class YouTrackCreateIssueStep extends Step {
 
         private Command getCommand(File buildLog) {
             String project = step.getProject();
-            if (project == null || project.isEmpty())
-                project = site.getProject();
+            if (project == null || project.isEmpty()) {
+                YouTrackProjectProperty ytprops = (YouTrackProjectProperty) run.getParent().getProperty(YouTrackProjectProperty.class);
+                project = ytprops.getProject();
+            }
 
             return server.createIssue(site.getName(), getUser(), project,
-                    step.getSummary(), step.getDescription(), step.getCommand(), buildLog);
+                    env.expand(step.getSummary()), env.expand(step.getDescription()),
+                    step.getCommand(), buildLog);
         }
 
         private void runAction(File buildLog) {
@@ -98,7 +109,12 @@ public class YouTrackCreateIssueStep extends Step {
             Command issue = getCommand(buildLog);
             youTrackCommandAction.addCommand(issue);
 
-            listener.getLogger().println("Created new YouTrack issue " + issue.getIssueId());
+            if(issue.getStatus()== Command.Status.OK)
+                listener.getLogger().println("Created new YouTrack issue " + issue.getIssueId());
+            else {
+                listener.fatalError("FAILURE Creating new YouTrack issue: " + issue.getStatus());
+                throw new IllegalStateException("Error from youtrack server during issue creation: " + issue.getResponse());
+            }
         }
 
         @Override

@@ -4,6 +4,7 @@ import hudson.model.Result;
 import org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition;
 import org.jenkinsci.plugins.workflow.job.WorkflowJob;
 import org.jenkinsci.plugins.workflow.job.WorkflowRun;
+import org.jenkinsci.plugins.youtrack.Command;
 import org.jenkinsci.plugins.youtrack.YouTrackProjectProperty;
 import org.jenkinsci.plugins.youtrack.YouTrackSite;
 import org.jenkinsci.plugins.youtrack.youtrackapi.User;
@@ -17,18 +18,21 @@ import org.jvnet.hudson.test.JenkinsRule;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
+import org.mockito.invocation.InvocationOnMock;
+import org.mockito.stubbing.Answer;
 
-import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.when;
+import java.io.File;
+
+import static org.mockito.Mockito.*;
 
 public class YoutrackCreateIssueStepTest {
     @Rule
-    public JenkinsRule j = new JenkinsRule();
+    public transient JenkinsRule j = new JenkinsRule();
 
     @ClassRule
     public static BuildWatcher bw = new BuildWatcher();
 
-    @Mock
+    @Mock()
     private YouTrackProjectProperty ytProperties;
 
     @Mock
@@ -44,12 +48,14 @@ public class YoutrackCreateIssueStepTest {
     public void setup() {
         MockitoAnnotations.initMocks(this);
 
+        when(ytProperties.getProject()).thenReturn("TEST");
         when(ytProperties.getDescriptor()).thenReturn(YouTrackProjectProperty.DESCRIPTOR);
         when(ytProperties.getSite()).thenReturn(site);
         when(site.createServer()).thenReturn(server);
         when(site.getUsername()).thenReturn("test");
         when(site.getPassword()).thenReturn("test");
         when(site.getUser(server)).thenReturn(user);
+        when(site.getName()).thenReturn("YouTrackTestSite");
         when(server.login("test", "test")).thenReturn(user);
 
         Mockito.reset(user);
@@ -116,10 +122,42 @@ public class YoutrackCreateIssueStepTest {
         );
 
         doReturn(true).when(user).isLoggedIn();
+        doAnswer(new Answer() {
+            @Override
+            public Object answer(InvocationOnMock invocation) throws Throwable {
+                Command issue = new Command();
+                issue.setIssueId("TEST-254");
+                issue.setStatus(Command.Status.FAILED);
+                for(Object o : invocation.getArguments())
+                    System.out.println("Invalid Arguments: " + o);
+                return issue;
+            }
+        }).when(server).createIssue(
+                anyString(), any(User.class),
+                anyString(), anyString(), anyString(), anyString(),
+                any(File.class));
+
+
+        doAnswer(new Answer() {
+            @Override
+            public Object answer(InvocationOnMock invocation) throws Throwable {
+                Command issue = new Command();
+                issue.setIssueId("TEST-254");
+                issue.setStatus(Command.Status.OK);
+
+                return issue;
+            }
+        }).when(server).createIssue(
+                eq("YouTrackTestSite"), any(User.class),
+                eq("TEST"),
+                eq("Build jenkins-YouTrackTest-1 on Jenkins"),
+                eq("Automatic issue created by Jenkins for build jenkins-YouTrackTest-1: " + job.getAbsoluteUrl() + "1/"),
+                eq(null),
+                any(File.class));
 
         job.addProperty(ytProperties);
         WorkflowRun b = j.assertBuildStatus(Result.SUCCESS, job.scheduleBuild2(0));
-        j.assertLogContains("Could not login user to YouTrack", b);
+        j.assertLogContains("Created new YouTrack issue TEST-254", b);
         j.assertLogContains("SUCCESS", b);
     }
 }
