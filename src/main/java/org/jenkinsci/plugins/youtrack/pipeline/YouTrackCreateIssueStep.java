@@ -26,11 +26,10 @@ import java.util.HashSet;
 import java.util.Set;
 
 public class YouTrackCreateIssueStep extends Step {
-    @Getter @Setter private String project;
+    @Getter @DataBoundSetter private String project;
     @Getter private String summary = DescriptorImpl.DEFAULT_SUMMARY;
     @Getter private String description = DescriptorImpl.DEFAULT_DESCRIPTION;
-    @Getter @Setter private String visibility;
-    @Getter @Setter private String command;
+    @Getter @DataBoundSetter private String command;
     @Getter @DataBoundSetter private boolean attachBuildLog = true;
 
     @DataBoundConstructor
@@ -95,9 +94,13 @@ public class YouTrackCreateIssueStep extends Step {
                 project = ytprops.getProject();
             }
 
-            return server.createIssue(site.getName(), getUser(), project,
-                    env.expand(step.getSummary()), env.expand(step.getDescription()),
-                    step.getCommand(), buildLog);
+            return server.createIssue(
+                    site.getName(), getUser(),
+                    env.expand(project),
+                    env.expand(step.getSummary()),
+                    env.expand(step.getDescription()),
+                    env.expand(step.getCommand()),
+                    buildLog);
         }
 
         private void runAction(File buildLog) {

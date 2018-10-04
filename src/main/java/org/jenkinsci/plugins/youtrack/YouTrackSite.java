@@ -51,10 +51,7 @@ public class YouTrackSite {
                 return site;
             }
         }
-        YouTrackSite[] sites = YouTrackProjectProperty.DESCRIPTOR.getSites();
-        if (sites.length == 1) {
-            return sites[0];
-        }
+
         return null;
     }
 

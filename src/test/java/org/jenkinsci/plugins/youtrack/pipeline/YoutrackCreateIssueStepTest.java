@@ -63,22 +63,23 @@ public class YoutrackCreateIssueStepTest {
 
     @Test
     public void testNoSiteSetup() throws Exception {
-       WorkflowJob job = j.createProject(WorkflowJob.class, "YouTrackTest");
-       job.setDefinition(new CpsFlowDefinition(
-               "pipeline {\n" +
-                     "  agent any\n"+
-                     "  stages {\n"+
-                     "    stage(\"Notify\") {\n"+
-                     "      steps {\n"+
-                     "        ytCreateIssue()\n" +
-                     "      }\n" +
-                     "    }\n" +
-                     "  }\n" +
-                     "}", true)
-       );
-       WorkflowRun b = j.assertBuildStatusSuccess(job.scheduleBuild2(0));
-       j.assertLogContains("No YouTrack site configured", b);
-       j.assertLogContains("SUCCESS", b);
+        WorkflowJob job = j.createProject(WorkflowJob.class, "YouTrackTestNoSite");
+        job.removeProperty(YouTrackProjectProperty.class);
+        job.setDefinition(new CpsFlowDefinition(
+                "pipeline {\n" +
+                        "  agent any\n" +
+                        "  stages {\n" +
+                        "    stage(\"Notify\") {\n" +
+                        "      steps {\n" +
+                        "        ytCreateIssue()\n" +
+                        "      }\n" +
+                        "    }\n" +
+                        "  }\n" +
+                        "}", true)
+        );
+        WorkflowRun b = j.assertBuildStatusSuccess(job.scheduleBuild2(0));
+        j.assertLogContains("No YouTrack site configured", b);
+        j.assertLogContains("SUCCESS", b);
     }
 
     @Test
@@ -160,4 +161,142 @@ public class YoutrackCreateIssueStepTest {
         j.assertLogContains("Created new YouTrack issue TEST-254", b);
         j.assertLogContains("SUCCESS", b);
     }
+
+    @Test
+    public void testCustomIssue() throws Exception {
+        WorkflowJob job = j.createProject(WorkflowJob.class, "YouTrackTest");
+        job.setDefinition(new CpsFlowDefinition(
+                "pipeline {\n" +
+                        "  agent any\n"+
+                        "  stages {\n"+
+                        "    stage(\"Notify\") {\n"+
+                        "      steps {\n"+
+                        "        ytCreateIssue(\n" +
+                        "           summary: \"This is not an issue from build ${BUILD_NUMBER}: ${currentBuild.currentResult}\"," +
+                        "           description: \"This is not an issue test ${BUILD_TAG}\")\n" +
+                        "      }\n" +
+                        "    }\n" +
+                        "  }\n" +
+                        "}", true)
+        );
+
+        doReturn(true).when(user).isLoggedIn();
+        doAnswer(new Answer() {
+            @Override
+            public Object answer(InvocationOnMock invocation) throws Throwable {
+                Command issue = new Command();
+                issue.setIssueId("TEST-254");
+                issue.setStatus(Command.Status.OK);
+
+                return issue;
+            }
+        }).when(server).createIssue(
+                eq("YouTrackTestSite"), any(User.class),
+                eq("TEST"),
+                eq("This is not an issue from build 1: SUCCESS"),
+                eq("This is not an issue test jenkins-YouTrackTest-1"),
+                eq(null),
+                (File) notNull());
+
+        job.addProperty(ytProperties);
+        WorkflowRun b = j.assertBuildStatus(Result.SUCCESS, job.scheduleBuild2(0));
+        j.assertLogContains("Created new YouTrack issue TEST-254", b);
+        j.assertLogContains("SUCCESS", b);
+    }
+
+    @Test
+    public void testFullCustomIssue() throws Exception {
+        WorkflowJob job = j.createProject(WorkflowJob.class, "YouTrackTest");
+        job.setDefinition(new CpsFlowDefinition(
+                "pipeline {\n" +
+                        "  agent any\n"+
+                        "  stages {\n"+
+                        "    stage(\"Notify\") {\n"+
+                        "      steps {\n"+
+                        "        ytCreateIssue(\n" +
+                        "           project: \"${JOB_NAME}\",\n" +
+                        "           summary: \"This is not an issue from build ${BUILD_NUMBER}: ${currentBuild.currentResult}\"," +
+                        "           description: \"This is not an issue test ${BUILD_TAG}\",\n" +
+                        "           command: 'for ${JOB_NAME}'," +
+                        "           attachBuildLog: false)" +
+                        "      }\n" +
+                        "    }\n" +
+                        "  }\n" +
+                        "}", true)
+        );
+
+        doReturn(true).when(user).isLoggedIn();
+        doAnswer(new Answer() {
+            @Override
+            public Object answer(InvocationOnMock invocation) throws Throwable {
+                Command issue = new Command();
+                issue.setIssueId("TEST-254");
+                issue.setStatus(Command.Status.OK);
+
+                return issue;
+            }
+        }).when(server).createIssue(
+                eq("YouTrackTestSite"), any(User.class),
+                eq("YouTrackTest"),
+                eq("This is not an issue from build 1: SUCCESS"),
+                eq("This is not an issue test jenkins-YouTrackTest-1"),
+                eq("for YouTrackTest"),
+                eq(null));
+
+        job.addProperty(ytProperties);
+        WorkflowRun b = j.assertBuildStatus(Result.SUCCESS, job.scheduleBuild2(0));
+        j.assertLogContains("Created new YouTrack issue TEST-254", b);
+        j.assertLogContains("SUCCESS", b);
+    }
+
+    @Test
+    public void testFullCustomIssueOnSuccess() throws Exception {
+        WorkflowJob job = j.createProject(WorkflowJob.class, "YouTrackTest");
+        job.setDefinition(new CpsFlowDefinition(
+                "pipeline {\n" +
+                        "  agent any\n"+
+                        "  stages {\n"+
+                        "    stage(\"Notify\") {\n"+
+                        "      steps {\n"+
+                        "        echo 'test'\n"+
+                        "      }\n"+
+                        "      post {\n"+
+                        "       success {\n"+
+                        "        ytCreateIssue(\n" +
+                        "           project: \"${JOB_NAME}\",\n" +
+                        "           summary: \"This is not an issue from build ${BUILD_NUMBER}: ${currentBuild.currentResult}\"," +
+                        "           description: \"This is not an issue test ${BUILD_TAG}\",\n" +
+                        "           command: 'for ${JOB_NAME}'," +
+                        "           attachBuildLog: false)" +
+                        "       }\n" +
+                        "      }\n" +
+                        "    }\n" +
+                        "  }\n" +
+                        "}", true)
+        );
+
+        doReturn(true).when(user).isLoggedIn();
+        doAnswer(new Answer() {
+            @Override
+            public Object answer(InvocationOnMock invocation) throws Throwable {
+                Command issue = new Command();
+                issue.setIssueId("TEST-254");
+                issue.setStatus(Command.Status.OK);
+
+                return issue;
+            }
+        }).when(server).createIssue(
+                eq("YouTrackTestSite"), any(User.class),
+                eq("YouTrackTest"),
+                eq("This is not an issue from build 1: SUCCESS"),
+                eq("This is not an issue test jenkins-YouTrackTest-1"),
+                eq("for YouTrackTest"),
+                eq(null));
+
+        job.addProperty(ytProperties);
+        WorkflowRun b = j.assertBuildStatus(Result.SUCCESS, job.scheduleBuild2(0));
+        j.assertLogContains("Created new YouTrack issue TEST-254", b);
+        j.assertLogContains("SUCCESS", b);
+    }
+
 }
