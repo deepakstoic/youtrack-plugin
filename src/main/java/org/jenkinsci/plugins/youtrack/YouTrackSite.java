@@ -1,9 +1,6 @@
 package org.jenkinsci.plugins.youtrack;
 
-import hudson.model.AbstractBuild;
-import hudson.model.AbstractProject;
-import hudson.model.Job;
-import hudson.model.Result;
+import hudson.model.*;
 import lombok.Getter;
 import lombok.Setter;
 import org.jenkinsci.plugins.scriptsecurity.sandbox.groovy.SecureGroovyScript;
@@ -58,18 +55,18 @@ public class YouTrackSite {
 
     /**
      * Updates the result for build, depending on the failure mode.
-     * @param build the build to update the result for.
+     * @param run the build to update the result for.
      */
-    public void failed(AbstractBuild<?, ?> build) {
+    public void failed(Run<?, ?> run) {
         if (failureMode != null) {
             switch (failureMode) {
                 case NONE:
                     break;
                 case UNSTABLE:
-                    build.setResult(Result.UNSTABLE);
+                    run.setResult(Result.UNSTABLE);
                     break;
                 case FAILURE:
-                    build.setResult(Result.FAILURE);
+                    run.setResult(Result.FAILURE);
                     break;
             }
         }
