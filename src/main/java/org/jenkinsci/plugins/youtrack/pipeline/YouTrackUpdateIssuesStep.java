@@ -56,14 +56,12 @@ public class YouTrackUpdateIssuesStep extends Step {
         private transient User user;
         private transient EnvVars env;
         private transient YouTrackProjectProperty ytpp;
-        private transient List<ChangeLogSet<? extends ChangeLogSet.Entry>> changelogs;
         private static final Logger LOGGER = Logger.getLogger(YouTrackUpdateIssuesStep.class.getName());
 
         protected Execution(YouTrackUpdateIssuesStep step, @Nonnull StepContext context) throws IOException, InterruptedException {
             super(context);
             this.step = step;
             run = context.get(WorkflowRun.class);
-            changelogs = run.getChangeSets();
             listener = context.get(TaskListener.class);
             env = context.get(EnvVars.class);
             site = YouTrackSite.get(run.getParent());
@@ -85,32 +83,32 @@ public class YouTrackUpdateIssuesStep extends Step {
 
         @Override
         protected Void run() throws Exception {
+            if (server == null) {
+                listener.getLogger().println("No YouTrack site configured");
+                return null;
+            }
+
             User user = getUser();
             if (user == null || !user.isLoggedIn()) {
                 listener.getLogger().append("FAILED: log in with set YouTrack user");
                 site.failed(run);
             }
 
-            run.addAction(new YouTrackIssueAction(run.getParent()));
-
-            List<ChangeLogSet.Entry> changeLogEntries = new ArrayList<ChangeLogSet.Entry>();
-            for (ChangeLogSet cs : changelogs) {
-                Iterator<? extends ChangeLogSet.Entry> changeLogIterator = cs.iterator();
-                while (changeLogIterator.hasNext())
-                    changeLogEntries.add(changeLogIterator.next());
-            }
-
             YouTrackCommandAction commandAction = new YouTrackCommandAction(run);
 
             List<Issue> fixedIssues = new ArrayList<>();
             ArrayListMultimap<Issue, ChangeLogSet.Entry> relatedChanges = ArrayListMultimap.create();
-            for (ChangeLogSet.Entry entry : changeLogEntries) {
+            for (ChangeLogSet.Entry entry : site.getChangeLogEntries(run)) {
+                listener.getLogger().println("Looking for issues about changeset: " + entry.getCommitId());
                 List<Issue> issuesFromCommit = server.search(getUser(), "vcs changes: " + entry.getCommitId());
                 for (Issue issue : issuesFromCommit) {
                     relatedChanges.put(issue, entry);
                     if(isFixed(issue)) fixedIssues.add(issue);
                 }
             }
+
+            if(relatedChanges.isEmpty())
+                listener.getLogger().println("No issues to update.");
 
             for (Issue relatedIssue : relatedChanges.keySet()) {
                 List<ChangeLogSet.Entry> entries = relatedChanges.get(relatedIssue);

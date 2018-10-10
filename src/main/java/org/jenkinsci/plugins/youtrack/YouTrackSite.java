@@ -1,13 +1,17 @@
 package org.jenkinsci.plugins.youtrack;
 
 import hudson.model.*;
+import hudson.scm.ChangeLogSet;
 import lombok.Getter;
 import lombok.Setter;
 import org.jenkinsci.plugins.scriptsecurity.sandbox.groovy.SecureGroovyScript;
+import org.jenkinsci.plugins.workflow.job.WorkflowRun;
 import org.jenkinsci.plugins.youtrack.youtrackapi.User;
 import org.jenkinsci.plugins.youtrack.youtrackapi.YouTrackServer;
 import org.kohsuke.stapler.DataBoundConstructor;
 
+import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 
 public class YouTrackSite {
@@ -52,6 +56,17 @@ public class YouTrackSite {
         return null;
     }
 
+    public List<? extends ChangeLogSet.Entry> getChangeLogEntries(WorkflowRun run) {
+        List<ChangeLogSet.Entry> changeLogEntries = new ArrayList<>();
+        for (ChangeLogSet cs : run.getChangeSets()) {
+            Iterator<? extends ChangeLogSet.Entry> changeLogIterator = cs.iterator();
+            while (changeLogIterator.hasNext()) {
+                changeLogEntries.add(changeLogIterator.next());
+            }
+        }
+
+        return changeLogEntries;
+    }
 
     /**
      * Updates the result for build, depending on the failure mode.

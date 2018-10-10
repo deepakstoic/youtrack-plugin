@@ -1,6 +1,8 @@
 package org.jenkinsci.plugins.youtrack.pipeline;
 
+import hudson.model.Action;
 import hudson.model.Result;
+import hudson.scm.ChangeLogSet;
 import org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition;
 import org.jenkinsci.plugins.workflow.job.WorkflowJob;
 import org.jenkinsci.plugins.workflow.job.WorkflowRun;
@@ -21,7 +23,11 @@ import org.mockito.MockitoAnnotations;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 
+import javax.annotation.CheckForNull;
 import java.io.File;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
 
 import static org.mockito.Mockito.*;
 
@@ -43,6 +49,9 @@ public class YoutrackUpdateIssuesStepTest {
 
     @Mock
     private User user;
+
+    @Mock
+    private hudson.model.User jenkinsUser;
 
     @Before
     public void setup() {
@@ -71,7 +80,7 @@ public class YoutrackUpdateIssuesStepTest {
                         "  stages {\n" +
                         "    stage(\"Notify\") {\n" +
                         "      steps {\n" +
-                        "        ytCreateIssue()\n" +
+                        "        ytUpdateIssues()\n" +
                         "      }\n" +
                         "    }\n" +
                         "  }\n" +
@@ -80,5 +89,90 @@ public class YoutrackUpdateIssuesStepTest {
         WorkflowRun b = j.assertBuildStatusSuccess(job.scheduleBuild2(0));
         j.assertLogContains("No YouTrack site configured", b);
         j.assertLogContains("SUCCESS", b);
+    }
+
+    @Test
+    public void testWithSiteSetupNoChangeSets() throws Exception {
+        WorkflowJob job = j.createProject(WorkflowJob.class, "YouTrackDefaultSite");
+        job.addProperty(ytProperties);
+        job.setDefinition(new CpsFlowDefinition(
+                "pipeline {\n" +
+                        "  agent any\n" +
+                        "  stages {\n" +
+                        "    stage(\"Notify\") {\n" +
+                        "      steps {\n" +
+                        "        ytUpdateIssues()\n" +
+                        "      }\n" +
+                        "    }\n" +
+                        "  }\n" +
+                        "}", true)
+        );
+
+        doReturn(true).when(user).isLoggedIn();
+
+        WorkflowRun b = j.assertBuildStatusSuccess(job.scheduleBuild2(0));
+        j.assertLogContains("No issues to update", b);
+        j.assertLogContains("SUCCESS", b);
+    }
+
+    @Test
+    public void testWithSiteSetupNoIssues() throws Exception {
+        WorkflowJob job = j.createProject(WorkflowJob.class, "YouTrackDefaultSite");
+        job.addProperty(ytProperties);
+        job.setDefinition(new CpsFlowDefinition(
+                "pipeline {\n" +
+                        "  agent any\n" +
+                        "  stages {\n" +
+                        "    stage(\"Notify\") {\n" +
+                        "      steps {\n" +
+                        "        ytUpdateIssues()\n" +
+                        "      }\n" +
+                        "    }\n" +
+                        "  }\n" +
+                        "}", true)
+        );
+
+        List<ChangeLogSet.Entry> entries = new ArrayList<>();
+        entries.add(new DummyEntry(jenkinsUser, "test1", "commit 1"));
+
+        doReturn(true).when(user).isLoggedIn();
+        doReturn(entries).when(site).getChangeLogEntries(any());
+
+        WorkflowRun b = j.assertBuildStatusSuccess(job.scheduleBuild2(0));
+        j.assertLogContains("Looking for issues about changeset: test1", b);
+        j.assertLogContains("No issues to update", b);
+        j.assertLogContains("SUCCESS", b);
+    }
+}
+
+class DummyEntry extends ChangeLogSet.Entry {
+    private hudson.model.User user;
+    private String cid;
+    private String msg;
+
+    public DummyEntry(hudson.model.User user, String cid, String msg) {
+        this.user = user;
+        this.cid =  cid;
+        this.msg = msg;
+    }
+
+    @Override
+    public String getCommitId() {
+        return cid;
+    }
+
+    @Override
+    public String getMsg() {
+        return msg;
+    }
+
+    @Override
+    public hudson.model.User getAuthor() {
+        return user;
+    }
+
+    @Override
+    public Collection<String> getAffectedPaths() {
+        return new ArrayList<>();
     }
 }
