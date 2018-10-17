@@ -9,6 +9,7 @@ import org.jenkinsci.plugins.workflow.job.WorkflowRun;
 import org.jenkinsci.plugins.youtrack.Command;
 import org.jenkinsci.plugins.youtrack.YouTrackProjectProperty;
 import org.jenkinsci.plugins.youtrack.YouTrackSite;
+import org.jenkinsci.plugins.youtrack.youtrackapi.Issue;
 import org.jenkinsci.plugins.youtrack.youtrackapi.User;
 import org.jenkinsci.plugins.youtrack.youtrackapi.YouTrackServer;
 import org.junit.Before;
@@ -51,6 +52,15 @@ public class YoutrackUpdateIssuesStepTest {
     private User user;
 
     @Mock
+    private Issue issue1;
+
+    @Mock
+    private Issue issue2;
+
+    @Mock
+    private Issue issue3;
+
+    @Mock
     private hudson.model.User jenkinsUser;
 
     @Before
@@ -60,12 +70,22 @@ public class YoutrackUpdateIssuesStepTest {
         when(ytProperties.getProject()).thenReturn("TEST");
         when(ytProperties.getDescriptor()).thenReturn(YouTrackProjectProperty.DESCRIPTOR);
         when(ytProperties.getSite()).thenReturn(site);
+        when(ytProperties.getFixedValues()).thenReturn("Fixed,Done,Verified,Won't Fix");
         when(site.createServer()).thenReturn(server);
         when(site.getUsername()).thenReturn("test");
         when(site.getPassword()).thenReturn("test");
         when(site.getUser(server)).thenReturn(user);
         when(site.getName()).thenReturn("YouTrackTestSite");
         when(server.login("test", "test")).thenReturn(user);
+
+        when(issue1.getId()).thenReturn("TEST-1");
+        when(issue1.getState()).thenReturn("Fixed");
+
+        when(issue2.getId()).thenReturn("TEST-2");
+        when(issue2.getState()).thenReturn("In Progress");
+
+        when(issue3.getId()).thenReturn("TEST-3");
+        when(issue3.getState()).thenReturn("Won't Fix");
 
         Mockito.reset(user);
     }
@@ -142,6 +162,137 @@ public class YoutrackUpdateIssuesStepTest {
         j.assertLogContains("Looking for issues about changeset: test1", b);
         j.assertLogContains("No issues to update", b);
         j.assertLogContains("SUCCESS", b);
+    }
+
+    @Test
+    public void testWithSiteAndIssues() throws Exception {
+        WorkflowJob job = j.createProject(WorkflowJob.class, "YouTrackDefaultSite");
+        job.addProperty(ytProperties);
+        job.setDefinition(new CpsFlowDefinition(
+                "pipeline {\n" +
+                        "  agent any\n" +
+                        "  stages {\n" +
+                        "    stage(\"Notify\") {\n" +
+                        "      steps {\n" +
+                        "        ytUpdateIssues()\n" +
+                        "      }\n" +
+                        "    }\n" +
+                        "  }\n" +
+                        "}", true)
+        );
+
+        List<ChangeLogSet.Entry> entries = new ArrayList<>();
+        entries.add(new DummyEntry(jenkinsUser, "test1", "commit 1"));
+        entries.add(new DummyEntry(jenkinsUser, "test2", "commit 2 ^TEST-2"));
+
+        List<Issue> issues = new ArrayList<>();
+        issues.add(issue1);
+        issues.add(issue2);
+        issues.add(issue3);
+
+        List<Issue> issues2 = new ArrayList<>();
+        issues2.add(issue2);
+
+        doReturn(true).when(user).isLoggedIn();
+        doReturn(entries).when(site).getChangeLogEntries(any());
+        doReturn(issues).when(server).search(user, "vcs changes: test1");
+        doReturn(issues2).when(server).search(user, "vcs changes: test2");
+
+        WorkflowRun b = j.assertBuildStatusSuccess(job.scheduleBuild2(0));
+        j.assertLogContains("Looking for issues about changeset: test1", b);
+        j.assertLogContains("Looking for issues about changeset: test2", b);
+        j.assertLogContains("- found issue: TEST-1 [RESOLVED]", b);
+        j.assertLogContains("- found issue: TEST-2", b);
+        j.assertLogContains("- found issue: TEST-3 [RESOLVED]", b);
+        j.assertLogContains("SUCCESS", b);
+    }
+
+    @Test
+    public void testWithCommands() throws Exception {
+        WorkflowJob job = j.createProject(WorkflowJob.class, "YouTrackDefaultSite");
+        job.addProperty(ytProperties);
+        job.setDefinition(new CpsFlowDefinition(
+                "pipeline {\n" +
+                        "  agent any\n" +
+                        "  stages {\n" +
+                        "    stage(\"Notify\") {\n" +
+                        "      steps {\n" +
+                        "        ytUpdateIssues commands: ['for iceseyes', '+1', 'priority major add tag fix this week']\n" +
+                        "      }\n" +
+                        "    }\n" +
+                        "  }\n" +
+                        "}", true)
+        );
+
+        List<ChangeLogSet.Entry> entries = new ArrayList<>();
+        entries.add(new DummyEntry(jenkinsUser, "test1", "commit 1"));
+        entries.add(new DummyEntry(jenkinsUser, "test2", "commit 2 ^TEST-2"));
+
+        List<Issue> issues = new ArrayList<>();
+        issues.add(issue1);
+        issues.add(issue2);
+        issues.add(issue3);
+
+        List<Issue> issues2 = new ArrayList<>();
+        issues2.add(issue2);
+
+        doReturn(true).when(user).isLoggedIn();
+        doReturn(entries).when(site).getChangeLogEntries(any());
+        doReturn(issues).when(server).search(user, "vcs changes: test1");
+        doReturn(issues2).when(server).search(user, "vcs changes: test2");
+        doReturn(true).when(site).isCommandsEnabled();
+
+        WorkflowRun b = j.assertBuildStatusSuccess(job.scheduleBuild2(0));
+        j.assertLogContains("Looking for issues about changeset: test1", b);
+        j.assertLogContains("Looking for issues about changeset: test2", b);
+        j.assertLogContains("Applying command: for iceseyes, to issue TEST-1", b);
+        j.assertLogContains("Applying command: for iceseyes, to issue TEST-2", b);
+        j.assertLogContains("Applying command: for iceseyes, to issue TEST-3", b);
+        j.assertLogContains("Applying command: +1, to issue TEST-1", b);
+        j.assertLogContains("Applying command: +1, to issue TEST-2", b);
+        j.assertLogContains("Applying command: +1, to issue TEST-3", b);
+        j.assertLogContains("Applying command: priority major add tag fix this week, to issue TEST-1", b);
+        j.assertLogContains("Applying command: priority major add tag fix this week, to issue TEST-2", b);
+        j.assertLogContains("Applying command: priority major add tag fix this week, to issue TEST-3", b);
+        j.assertLogContains("SUCCESS", b);
+
+        doReturn(false).when(site).isCommandsEnabled();
+    }
+
+    @Test
+    public void testWithCommand() throws Exception {
+        WorkflowJob job = j.createProject(WorkflowJob.class, "YouTrackDefaultSite");
+        job.addProperty(ytProperties);
+        job.setDefinition(new CpsFlowDefinition(
+                "pipeline {\n" +
+                        "  agent any\n" +
+                        "  stages {\n" +
+                        "    stage(\"Notify\") {\n" +
+                        "      steps {\n" +
+                        "        ytUpdateIssues commands: [\"for ${BUILD_NUMBER}\"]\n" +
+                        "      }\n" +
+                        "    }\n" +
+                        "  }\n" +
+                        "}", true)
+        );
+
+        List<ChangeLogSet.Entry> entries = new ArrayList<>();
+        entries.add(new DummyEntry(jenkinsUser, "test2", "commit 2 ^TEST-2"));
+
+        List<Issue> issues2 = new ArrayList<>();
+        issues2.add(issue2);
+
+        doReturn(true).when(user).isLoggedIn();
+        doReturn(entries).when(site).getChangeLogEntries(any());
+        doReturn(issues2).when(server).search(user, "vcs changes: test2");
+        doReturn(true).when(site).isCommandsEnabled();
+
+        WorkflowRun b = j.assertBuildStatusSuccess(job.scheduleBuild2(0));
+        j.assertLogContains("Looking for issues about changeset: test2", b);
+        j.assertLogContains("Applying command: for 1, to issue TEST-2", b);
+        j.assertLogContains("SUCCESS", b);
+
+        doReturn(false).when(site).isCommandsEnabled();
     }
 }
 

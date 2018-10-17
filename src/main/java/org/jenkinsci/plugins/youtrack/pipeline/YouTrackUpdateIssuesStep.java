@@ -95,6 +95,7 @@ public class YouTrackUpdateIssuesStep extends Step {
             }
 
             YouTrackCommandAction commandAction = new YouTrackCommandAction(run);
+            run.addAction(commandAction);
 
             List<Issue> fixedIssues = new ArrayList<>();
             ArrayListMultimap<Issue, ChangeLogSet.Entry> relatedChanges = ArrayListMultimap.create();
@@ -102,8 +103,14 @@ public class YouTrackUpdateIssuesStep extends Step {
                 listener.getLogger().println("Looking for issues about changeset: " + entry.getCommitId());
                 List<Issue> issuesFromCommit = server.search(getUser(), "vcs changes: " + entry.getCommitId());
                 for (Issue issue : issuesFromCommit) {
+                    String log = "- found issue: " + issue.getId();
                     relatedChanges.put(issue, entry);
-                    if(isFixed(issue)) fixedIssues.add(issue);
+                    if(isFixed(issue)) {
+                        fixedIssues.add(issue);
+                        log += " [RESOLVED]";
+                    }
+
+                    listener.getLogger().println(log);
                 }
             }
 
@@ -122,9 +129,10 @@ public class YouTrackUpdateIssuesStep extends Step {
 
                 if(site.isCommandsEnabled()) {
                     for (String cmd_str : step.getCommands()) {
+                        listener.getLogger().println("Applying command: " + env.expand(cmd_str) + ", to issue " + relatedIssue.getId());
                         commandAction.addCommand(server.applyCommand(
                                 site.getName(), getUser(), relatedIssue,
-                                cmd_str, env.expand("By build ${BUILD_TAG}."),
+                                env.expand(cmd_str), env.expand("By build ${BUILD_TAG}."),
                                 null, null, site.isSilentCommands()));
                     }
                 }
@@ -152,7 +160,7 @@ public class YouTrackUpdateIssuesStep extends Step {
         private boolean isFixed(Issue issue) {
             String[] states = ytpp.getFixedValues().split(",");
             for (String state: states) {
-                if(issue.getState() == state)
+                if(state.equals(issue.getState()))
                     return true;
             }
 
