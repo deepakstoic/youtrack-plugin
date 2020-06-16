@@ -3,6 +3,7 @@ package org.jenkinsci.plugins.youtrack;
 import hudson.model.AbstractBuild;
 import hudson.model.Action;
 
+import hudson.model.Run;
 import lombok.Getter;
 
 import java.util.ArrayList;
@@ -13,16 +14,16 @@ import java.util.List;
  */
 public class YouTrackCommandAction implements Action {
     @Getter private List<Command> commands;
-    @Getter private AbstractBuild build;
+    @Getter private Run build;
 
-    public YouTrackCommandAction(AbstractBuild build) {
+    public YouTrackCommandAction(Run build) {
         this.build = build;
         commands = new ArrayList<Command>();
     }
 
     @SuppressWarnings("UnusedDeclaration")
     public String getIssueUrl() {
-        YouTrackSite youTrackSite = YouTrackSite.get(build.getProject());
+        YouTrackSite youTrackSite = YouTrackSite.get(build.getParent());
         return youTrackSite.getUrl() + "/issue/";
     }
 

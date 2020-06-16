@@ -8,6 +8,7 @@ import lombok.Getter;
 import lombok.Setter;
 import net.sf.json.JSONObject;
 import org.jenkinsci.plugins.scriptsecurity.sandbox.groovy.SecureGroovyScript;
+import org.jenkinsci.plugins.workflow.job.WorkflowJob;
 import org.jenkinsci.plugins.youtrack.youtrackapi.*;
 import org.jenkinsci.plugins.youtrack.youtrackapi.Project;
 import org.jenkinsci.plugins.youtrack.youtrackapi.User;
@@ -138,7 +139,7 @@ public class YouTrackProjectProperty extends JobProperty<AbstractProject<?, ?>> 
 
         @Override
         public boolean isApplicable(Class<? extends Job> jobType) {
-            return AbstractProject.class.isAssignableFrom(jobType);
+            return AbstractProject.class.isAssignableFrom(jobType) || WorkflowJob.class.isAssignableFrom(jobType);
         }
 
         public DescriptorImpl() {
