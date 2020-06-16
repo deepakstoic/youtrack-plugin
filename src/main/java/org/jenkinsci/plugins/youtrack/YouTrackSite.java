@@ -1,14 +1,18 @@
 package org.jenkinsci.plugins.youtrack;
 
-import hudson.model.AbstractBuild;
-import hudson.model.AbstractProject;
-import hudson.model.Result;
+import hudson.model.*;
+import hudson.scm.ChangeLogSet;
 import hudson.util.Secret;
 import lombok.Getter;
 import lombok.Setter;
 import org.jenkinsci.plugins.scriptsecurity.sandbox.groovy.SecureGroovyScript;
+import org.jenkinsci.plugins.workflow.job.WorkflowRun;
+import org.jenkinsci.plugins.youtrack.youtrackapi.User;
+import org.jenkinsci.plugins.youtrack.youtrackapi.YouTrackServer;
 import org.kohsuke.stapler.DataBoundConstructor;
 
+import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 
 public class YouTrackSite {
@@ -41,7 +45,7 @@ public class YouTrackSite {
         this.name = name;
     }
 
-    public static YouTrackSite get(AbstractProject<?, ?> project) {
+    public static YouTrackSite get(Job<?, ?> project) {
         YouTrackProjectProperty ypp = project.getProperty(YouTrackProjectProperty.class);
         if (ypp != null) {
             YouTrackSite site = ypp.getSite();
@@ -49,30 +53,51 @@ public class YouTrackSite {
                 return site;
             }
         }
-        YouTrackSite[] sites = YouTrackProjectProperty.DESCRIPTOR.getSites();
-        if (sites.length == 1) {
-            return sites[0];
-        }
+
         return null;
     }
 
+    public List<? extends ChangeLogSet.Entry> getChangeLogEntries(WorkflowRun run) {
+        List<ChangeLogSet.Entry> changeLogEntries = new ArrayList<>();
+        for (ChangeLogSet cs : run.getChangeSets()) {
+            Iterator<? extends ChangeLogSet.Entry> changeLogIterator = cs.iterator();
+            while (changeLogIterator.hasNext()) {
+                changeLogEntries.add(changeLogIterator.next());
+            }
+        }
+
+        return changeLogEntries;
+    }
 
     /**
      * Updates the result for build, depending on the failure mode.
-     * @param build the build to update the result for.
+     * @param run the build to update the result for.
      */
-    public void failed(AbstractBuild<?, ?> build) {
+    public void failed(Run<?, ?> run) {
         if (failureMode != null) {
             switch (failureMode) {
                 case NONE:
                     break;
                 case UNSTABLE:
-                    build.setResult(Result.UNSTABLE);
+                    run.setResult(Result.UNSTABLE);
                     break;
                 case FAILURE:
-                    build.setResult(Result.FAILURE);
+                    run.setResult(Result.FAILURE);
                     break;
             }
         }
+    }
+
+    public YouTrackServer createServer() {
+        return new YouTrackServer(getUrl());
+    }
+
+    public User getUser() { return getUser(null); }
+
+    public User getUser(YouTrackServer server) {
+        if(server==null)
+            server = createServer();
+
+        return server.login(getUsername(), getPassword());
     }
 }

@@ -1,8 +1,8 @@
 package org.jenkinsci.plugins.youtrack;
 
 import com.google.gson.Gson;
-import hudson.model.AbstractProject;
 import hudson.model.Action;
+import hudson.model.Job;
 import org.jenkinsci.plugins.youtrack.youtrackapi.Issue;
 import org.jenkinsci.plugins.youtrack.youtrackapi.User;
 import org.jenkinsci.plugins.youtrack.youtrackapi.YouTrackServer;
@@ -25,14 +25,14 @@ public class YouTrackIssueAction implements Action {
     /**
      * Reference to the project to get YouTrack site info from.
      */
-    public final AbstractProject project;
+    public final Job project;
 
     /**
      * Constructs the action.
      *
      * @param project the project to get site info from.
      */
-    public YouTrackIssueAction(AbstractProject project) {
+    public YouTrackIssueAction(Job project) {
         this.project = project;
     }
 
