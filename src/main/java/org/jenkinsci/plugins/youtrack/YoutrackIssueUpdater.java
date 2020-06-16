@@ -356,6 +356,17 @@ public class YoutrackIssueUpdater {
                     }
 
                     if (extraPrefixCommand != null) {
+                        try {
+                            EnvVars environment = build.getEnvironment(listener);
+                            if(environment != null){
+                            extraPrefixCommand = environment.expand(extraPrefixCommand);
+                            }
+                        } catch (IOException e) {
+//            LOGGER.error(e, e);                        
+                    }catch (InterruptedException e) {
+//            LOGGER.error(e, e);
+                }
+        
                         applyCommandToIssue(build, youTrackSite, youTrackServer, user, fixedIssues, changeLogEntry, issueAndCommand.getFirst(), extraPrefixCommand, null, listener, commands, isSilent);
                     }
 
